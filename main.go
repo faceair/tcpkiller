@@ -20,7 +20,8 @@ func main() {
 	}
 
 	options := gopacket.SerializeOptions{
-		FixLengths: true,
+		ComputeChecksums: true,
+		FixLengths:       true,
 	}
 
 	src := gopacket.NewPacketSource(handle, handle.LinkType())
@@ -47,30 +48,28 @@ func main() {
 
 		fmt.Printf("%s:%d > %s:%d\n", ip.SrcIP.String(), tcp.SrcPort, ip.DstIP.String(), tcp.DstPort)
 
+		neth := &layers.Ethernet{
+			SrcMAC:       eth.DstMAC,
+			DstMAC:       eth.SrcMAC,
+			EthernetType: layers.EthernetTypeIPv4,
+		}
+		nip := &layers.IPv4{
+			SrcIP:    ip.DstIP,
+			DstIP:    ip.SrcIP,
+			Version:  4,
+			TTL:      64,
+			Protocol: layers.IPProtocolTCP,
+		}
+		ntcp := &layers.TCP{
+			SrcPort: tcp.DstPort,
+			DstPort: tcp.SrcPort,
+			RST:     true,
+			Seq:     tcp.Ack,
+		}
+		ntcp.SetNetworkLayerForChecksum(nip)
+
 		buffer := gopacket.NewSerializeBuffer()
-		err := gopacket.SerializeLayers(buffer, options,
-			&layers.Ethernet{
-				SrcMAC:       eth.DstMAC,
-				DstMAC:       eth.SrcMAC,
-				EthernetType: layers.EthernetTypeIPv4,
-			},
-			&layers.IPv4{
-				SrcIP:    ip.DstIP,
-				DstIP:    ip.SrcIP,
-				Version:  4,
-				TTL:      64,
-				Protocol: layers.IPProtocolTCP,
-			},
-			&layers.TCP{
-				SrcPort: tcp.DstPort,
-				DstPort: tcp.SrcPort,
-				Seq:     tcp.Ack,
-				RST:     true,
-				ACK:     true,
-				Ack:     tcp.Seq + 1,
-			},
-		)
-		if err != nil {
+		if err := gopacket.SerializeLayers(buffer, options, neth, nip, ntcp); err != nil {
 			panic(err)
 		}
 
