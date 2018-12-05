@@ -1,7 +1,10 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -9,13 +12,19 @@ import (
 )
 
 func main() {
-	handle, err := pcap.OpenLive("en0", 128, true, pcap.BlockForever)
+	var iface, filter string
+	flag.StringVar(&iface, "i", "eth0", "specify the interface to listen on")
+	flag.Parse()
+
+	filter = strings.Join(flag.Args(), " ")
+
+	handle, err := pcap.OpenLive(iface, 64, true, time.Millisecond)
 	if err != nil {
 		panic(err)
 	}
 	defer handle.Close()
 
-	if err = handle.SetBPFFilter("tcp"); err != nil {
+	if err = handle.SetBPFFilter(filter); err != nil {
 		panic(err)
 	}
 
@@ -42,7 +51,7 @@ func main() {
 		}
 		tcp := tcpLayer.(*layers.TCP)
 
-		if tcp.SYN || tcp.FIN || tcp.RST {
+		if tcp.FIN || tcp.RST {
 			continue
 		}
 
